@@ -10,6 +10,9 @@ from flask_admin.contrib import sqla
 from flask_admin import helpers as admin_helpers
 from flask_admin import BaseView, expose
 from wtforms import PasswordField
+from flask_admin.form import rules
+from sqlalchemy.orm import relationship
+
 
 # Create Flask application
 app = Flask(__name__)
@@ -56,17 +59,18 @@ class DoIt(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False)
     description = db.Column(db.String(255), nullable=False)
-    did_its = db.relationship('DidIt', secondary=doits_didits,
-                              backref=db.backref('doits'))
+
+    def __str__(self):
+        return self.description
 
 
 class DidIt(db.Model):
     __tablename__ = 'didit'
     id = db.Column(db.Integer, primary_key=True)
     done_at = db.Column(db.DateTime())
+    do_it = db.relationship('DoIt', secondary=doits_didits,
+                              backref=db.backref('doit'))
 
-    def __str__(self):
-        return self.description
 
 
 # Setup Flask-Security
@@ -128,14 +132,10 @@ class DoItView(MyModelView):
 
 class DidItView(MyModelView):
     column_hide_backrefs = False
-    column_list = ['doits', 'done_at']
-    column_details_list = [('doit', 'name')]
-    # column_list = (‘<relationship>.<related column name>’)
-    # column_list = ('id', "done_at")
+    column_list = ['do_it', 'done_at']
+    column_details_list = ['description']
     column_editable_list = ['id', 'done_at']
     column_searchable_list = column_editable_list
-    # column_exclude_list = ['id']
-    # column_details_exclude_list = column_exclude_list
     column_filters = column_editable_list
 
 

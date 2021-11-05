@@ -107,7 +107,6 @@ class DoItView(MyModelView):
             return redirect(return_url)
 
         # process the model
-        flash(gettext(f"model is {type(model)}"))
         did_it = DidIt(do_it=[model], done_at=datetime.datetime.now())
         self.session.add(did_it)
 

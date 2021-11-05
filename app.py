@@ -1,6 +1,9 @@
 #!venv/bin/python
+import datetime
 import os
-from flask import Flask, url_for, redirect, render_template, request, abort
+from flask import Flask, url_for, redirect, render_template, request, abort, flash
+from flask_admin.babel import gettext
+from flask_admin.helpers import get_form_data
 from flask_sqlalchemy import SQLAlchemy
 from flask_security import Security, SQLAlchemyUserDatastore, \
     UserMixin, RoleMixin, login_required, current_user
@@ -9,10 +12,10 @@ import flask_admin
 from flask_admin.contrib import sqla
 from flask_admin import helpers as admin_helpers
 from flask_admin import BaseView, expose
+from markupsafe import Markup
 from wtforms import PasswordField
 from flask_admin.form import rules
 from sqlalchemy.orm import relationship
-
 
 # Create Flask application
 app = Flask(__name__)
@@ -69,8 +72,7 @@ class DidIt(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     done_at = db.Column(db.DateTime())
     do_it = db.relationship('DoIt', secondary=doits_didits,
-                              backref=db.backref('doit'))
-
+                            backref=db.backref('doit'))
 
 
 # Setup Flask-Security
@@ -123,11 +125,69 @@ class UserView(MyModelView):
 
 
 class DoItView(MyModelView):
+    column_list = ['name', 'description', 'do it now!']
     column_editable_list = ['name', 'description']
     column_searchable_list = column_editable_list
     column_exclude_list = ['id']
     column_details_exclude_list = column_exclude_list
     column_filters = column_editable_list
+
+    def _format_do_it_now(view, context, model, name):
+
+        # render a form with a submit button for student, include a hidden field for the student id
+        # note how checkout_view method is exposed as a route below
+        checkout_url = url_for('.did_it_view')
+
+        _html = '''
+            <form action="{checkout_url}" method="POST">
+                <input id="do_it_id" name="do_it_id"  type="hidden" value="{do_it_id}">
+                <button type='submit'>Do it!</button>
+            </form
+        '''.format(checkout_url=checkout_url, do_it_id=model.id)
+
+        return Markup(_html)
+
+    column_formatters = {
+        'do it now!': _format_do_it_now
+    }
+
+    @expose('checkout', methods=['POST'])
+    def did_it_view(self):
+
+        return_url = self.get_url('.index_view')
+
+        form = get_form_data()
+
+        if not form:
+            flash(gettext('Could not get form from request.'), 'error')
+            return redirect(return_url)
+
+        # Form is an ImmutableMultiDict
+        do_it_id = form['do_it_id']
+
+        # Get the model from the database
+        model = self.get_one(do_it_id)
+
+        if model is None:
+            flash(gettext('Do it not not found.'), 'error')
+            return redirect(return_url)
+
+        # process the model
+        flash(gettext(f"model is {type(model)}"))
+        did_it = DidIt(do_it=[model], done_at=datetime.datetime.now())
+        self.session.add(did_it)
+
+        try:
+            self.session.commit()
+            flash(gettext(f"Recorded a didit for DoIt, ID: {do_it_id}, at {did_it.done_at}"))
+        except Exception as ex:
+            if not self.handle_view_exception(ex):
+                raise
+
+            flash(gettext(f"Failed to Recorded a didit for DoIt, ID: {do_it_id}",
+                          error=str(ex)), 'error')
+
+        return redirect(return_url)
 
 
 class DidItView(MyModelView):
